@@ -3,7 +3,7 @@
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { WorkspaceId } from '../workspace-id.ts'
 
 /** Correlates one task-board request with the admitted Session operation. */
 export type TaskBoardSessionRequestId = Branded<'TaskBoardSessionRequestId'>

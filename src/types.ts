@@ -3,8 +3,8 @@
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { TaskBoardSessionRequestId } from '@deepseek-ai/dsh-task-board-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { TaskBoardSessionRequestId } from './host/session-types.ts'
+import type { WorkspaceId } from './workspace-id.ts'
 
 /** Stable identity of one continuing task card. */
 export type TaskBoardTaskId = Branded<'TaskBoardTaskId'>

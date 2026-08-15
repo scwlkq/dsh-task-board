@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import { TaskBoardController } from './controller.ts'
+import { TaskBoardController, type TaskBoardRemote } from './controller.ts'
 import { TaskBoardLauncher } from './TaskBoardLauncher.tsx'
 import { TaskBoardOverlay } from './TaskBoardOverlay.tsx'
 import { createTaskBoardStore } from './store.ts'
@@ -65,7 +65,11 @@ export async function apply(ctx: ClientContext): Promise<void> {
   const unmountRemote = await mountTaskBoardRemote(ctx.remote)
   ctx.effect(() => unmountRemote, 'ui-task-board: remote contribution')
 
-  const controller = new TaskBoardController(ctx.remote.taskBoard)
+  const taskBoard = ctx.get('remote.taskBoard') as TaskBoardRemote | undefined
+  if (taskBoard === undefined) {
+    throw new Error('task-board Remote contribution mounted without remote.taskBoard')
+  }
+  const controller = new TaskBoardController(taskBoard)
   const poller = new SnapshotPoller(async () => {
     await controller.refresh()
   }, { intervalMs: SNAPSHOT_POLL_INTERVAL_MS })

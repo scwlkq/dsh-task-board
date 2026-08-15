@@ -7,6 +7,10 @@ const root = resolve(import.meta.dirname, "..")
 const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
   readonly name?: string
   readonly scripts?: Readonly<Record<string, string>>
+  readonly peerDependencies?: Readonly<Record<string, string>>
+  readonly peerDependenciesMeta?: Readonly<Record<string, { readonly optional?: boolean }>>
+  readonly dependencies?: Readonly<Record<string, string>>
+  readonly devDependencies?: Readonly<Record<string, string>>
   readonly exports?: Readonly<Record<string, unknown>>
   readonly files?: readonly string[]
   readonly dsh?: {
@@ -40,6 +44,26 @@ describe("community package distribution", () => {
   it("does not execute lifecycle build scripts during GitHub installation", () => {
     for (const name of ["prepare", "preinstall", "install", "postinstall"]) {
       expect(manifest.scripts?.[name]).toBeUndefined()
+    }
+  })
+
+  it("keeps profile-provided runtime peers optional to package managers", () => {
+    const peers = Object.keys(manifest.peerDependencies ?? {}).sort()
+    const metadata = manifest.peerDependenciesMeta ?? {}
+    expect(Object.keys(metadata).sort()).toEqual(peers)
+    expect(peers.every((name) => metadata[name]?.optional === true)).toBe(true)
+  })
+
+  it("keeps browser-bundled libraries out of runtime dependencies", () => {
+    for (const name of [
+      "@dnd-kit/core",
+      "@dnd-kit/sortable",
+      "@dnd-kit/utilities",
+      "@tanstack/react-virtual",
+      "clsx",
+    ]) {
+      expect(manifest.dependencies?.[name]).toBeUndefined()
+      expect(manifest.devDependencies?.[name]).toBeTypeOf("string")
     }
   })
 

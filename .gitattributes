@@ -1,0 +1,4 @@
+lib/client.js linguist-generated=true whitespace=-trailing-space
+lib/client.js.map linguist-generated=true
+lib/index.js linguist-generated=true
+lib/types/** linguist-generated=true

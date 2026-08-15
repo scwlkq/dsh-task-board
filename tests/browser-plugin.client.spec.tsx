@@ -1,8 +1,7 @@
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry, type IWorkspaces } from '@deepseek-ai/dsh-client-runtime/client'
-import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
 import type { TaskBoardSnapshotResult } from '../src/types.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -11,6 +10,16 @@ import { TaskBoardOverlay } from '../src/client/TaskBoardOverlay.tsx'
 import type { TaskBoardInjected } from '../src/client/slots.ts'
 import type { TaskBoardRemote } from '../src/client/controller.ts'
 import { apply, inject } from '../src/client/index.ts'
+
+class TracedRemote extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'remote')
+  }
+
+  async $mount(): Promise<() => Promise<void>> {
+    return async () => {}
+  }
+}
 
 function snapshot(boardRevision = 0): RemoteResult<TaskBoardSnapshotResult> {
   return { ok: true, value: { ok: true, value: { boardRevision, tasks: [] } } }
@@ -53,10 +62,20 @@ async function bench() {
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
-  const forwarded = new TestRemote(ctx) as TestRemote & { taskBoard: TaskBoardRemote }
-  forwarded.taskBoard = taskBoardRemote()
+  const forwarded = new TracedRemote(ctx)
+  const taskBoard = taskBoardRemote()
   const unmountRemote = vi.fn(async () => {})
-  const mountRemote = vi.spyOn(forwarded, '$mount').mockResolvedValue(unmountRemote)
+  const mountRemote = vi.spyOn(forwarded, '$mount').mockImplementation(async () => {
+    const namespace = ctx.plugin({
+      name: 'remote.taskBoard',
+      apply(scope) {
+        scope.provide('remote.taskBoard', taskBoard)
+      },
+    })
+    await namespace
+    unmountRemote.mockImplementationOnce(async () => { await namespace.dispose() })
+    return unmountRemote
+  })
   const sessions = { open: vi.fn() }
   ctx.provide('sessions', sessions as never)
   const workspaces = { pickDirectory: vi.fn<IWorkspaces['pickDirectory']>(async () => null) }
@@ -103,6 +122,7 @@ async function bench() {
     mountRemote,
     sessions,
     slots,
+    taskBoard,
     unmountRemote,
     workspaces,
   }
@@ -143,7 +163,7 @@ describe('ui-task-board browser plugin', () => {
     const b = await bench()
     const entry = b.slots.entries('shell.overlay')[0]!
     const face = entry.inject?.() as unknown as TaskBoardInjected
-    const read = b.forwarded.taskBoard.snapshot as ReturnType<typeof vi.fn>
+    const read = b.taskBoard.snapshot as ReturnType<typeof vi.fn>
     await face.refresh()
     read.mockResolvedValueOnce(snapshot(3))
 
@@ -210,8 +230,8 @@ describe('ui-task-board browser plugin', () => {
     } as never)
     face.openSession('session-1' as never)
 
-    expect(b.forwarded.taskBoard.uploadAttachment).toHaveBeenCalledOnce()
-    expect(b.forwarded.taskBoard.create).toHaveBeenCalledOnce()
+    expect(b.taskBoard.uploadAttachment).toHaveBeenCalledOnce()
+    expect(b.taskBoard.create).toHaveBeenCalledOnce()
     expect(b.history).toHaveBeenCalledOnce()
     expect(b.sessions.open).toHaveBeenCalledWith('session-1')
   })
