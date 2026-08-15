@@ -1,0 +1,27 @@
+.dialog { width: min(1040px, calc(100vw - 24px)); }
+.content { display: flex; flex-direction: column; height: min(82vh, 900px); max-height: none; }
+.meta { align-items: center; display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 12px; }
+.meta span { display: grid; font-size: 11px; gap: 2px; }
+.meta small { color: var(--dsw-alias-label-tertiary, #888); font-size: 9px; }
+.meta strong { background: var(--dsw-alias-bg-layer-2, rgb(0 0 0 / 5%)); border-radius: 999px; font-size: 10px; margin-left: auto; padding: 5px 9px; }
+.toolbar { align-items: center; border-bottom: 1px solid var(--dsw-alias-border-l2, rgb(0 0 0 / 9%)); display: flex; gap: 7px; padding-bottom: 10px; }
+.toolbar select, .toolbar > button { background: var(--dsw-alias-bg-base, #fff); border: 1px solid var(--dsw-alias-border-l2, rgb(0 0 0 / 12%)); border-radius: 7px; color: inherit; cursor: pointer; font: inherit; font-size: 11px; min-height: 28px; padding: 0 8px; }
+.toolbar > :last-child { margin-left: auto; }
+.truncated, .failure { border-radius: 7px; font-size: 11px; margin-top: 10px; padding: 8px 10px; }
+.truncated { background: rgb(215 145 20 / 9%); color: #8b5d00; }
+.failure { background: rgb(220 70 70 / 9%); color: #b23737; display: grid; gap: 3px; }
+.loading { color: var(--dsw-alias-label-secondary, #777); margin: auto; }
+.log { flex: 1; min-height: 0; overflow: auto; padding-top: 10px; }
+.virtual { position: relative; width: 100%; }
+.virtualRow { left: 0; padding-bottom: 8px; position: absolute; top: 0; width: 100%; }
+.fallbackRows { display: grid; gap: 8px; }
+.row { background: var(--dsw-alias-bg-layer-2, rgb(0 0 0 / 3%)); border: 1px solid var(--dsw-alias-border-l2, rgb(0 0 0 / 8%)); border-radius: 9px; overflow: hidden; padding: 10px; }
+.row > header { align-items: center; color: var(--dsw-alias-label-tertiary, #888); display: flex; font-size: 9px; gap: 8px; margin-bottom: 8px; }
+.row > header strong { color: var(--dsw-alias-label-primary, #222); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.row > header time { margin-left: auto; }
+.row details { margin-bottom: 8px; }
+.row summary { color: var(--dsw-alias-label-secondary, #666); cursor: pointer; font-size: 10px; }
+.row pre { background: rgb(0 0 0 / 4%); border-radius: 6px; font-size: 11px; line-height: 1.5; overflow: auto; padding: 8px; white-space: pre-wrap; }
+.agentText, .messageText { line-height: 1.6; margin: 0; white-space: pre-wrap; }
+.agentText { font-size: 13px; }
+.messageText { font-size: 12px; }

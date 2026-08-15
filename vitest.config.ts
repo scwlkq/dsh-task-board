@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config"
 import ts from "typescript"
+import { fileURLToPath } from "node:url"
 
 const decoratorSyntax = /^\s*@[A-Za-z_$][\w$]*/m
 
@@ -30,6 +31,15 @@ function standardDecoratorPlugin() {
 
 export default defineConfig({
   plugins: [standardDecoratorPlugin()],
+  resolve: {
+    alias: {
+      "@deepseek-ai/dsh-client-runtime/client": fileURLToPath(new URL("./tests/support/client-runtime.ts", import.meta.url)),
+      "@deepseek-ai/dsh-client-web-react": fileURLToPath(new URL("./tests/support/client-web-react.ts", import.meta.url)),
+      "@deepseek-ai/dsh-client-locale/client": fileURLToPath(new URL("./tests/support/client-locale.ts", import.meta.url)),
+      "@deepseek-ai/dsh-client-test-runtime": fileURLToPath(new URL("./tests/support/client-test-runtime.ts", import.meta.url)),
+      "@deepseek-ai/dsh-client-ui-primitives": fileURLToPath(new URL("./tests/support/ui-primitives.tsx", import.meta.url)),
+    },
+  },
   test: {
     environment: "node",
   },
