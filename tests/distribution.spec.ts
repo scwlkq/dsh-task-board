@@ -54,10 +54,17 @@ describe("community package distribution", () => {
           {
             id: "task-board",
             name: "dsh-task-board",
+            config: {
+              automaticTitleMaxChars: 80,
+              maxTitleBytes: 4096,
+              maxDescriptionBytes: 65_536,
+              maxAcceptanceCriteriaBytes: 65_536,
+              maxFeedbackBytes: 32_768,
+              maxFollowupBytes: 32_768,
+            },
           },
         ],
       },
     ])
   })
 })
-

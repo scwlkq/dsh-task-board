@@ -1,4 +1,10 @@
 - insert:
     - id: task-board
       name: dsh-task-board
-
+      config:
+        automaticTitleMaxChars: 80
+        maxTitleBytes: 4096
+        maxDescriptionBytes: 65536
+        maxAcceptanceCriteriaBytes: 65536
+        maxFeedbackBytes: 32768
+        maxFollowupBytes: 32768
