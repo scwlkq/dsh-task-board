@@ -35,6 +35,23 @@ function sourceAssetPath(source: string, importer: string): string {
   return resolvePath(emitted.slice(0, boundary), 'src', emitted.slice(boundary + marker.length))
 }
 
+/**
+ * Serializes CSS module exports with a stable property order.
+ *
+ * @param cssExports CSS class names emitted by Lightning CSS.
+ * @returns A deterministic JSON object mapping local names to generated names.
+ */
+export function serializeCssClassMap(
+  cssExports: Readonly<Record<string, { readonly name: string }>> | undefined,
+): string {
+  const entries = Object.entries(cssExports ?? {}).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  )
+  return JSON.stringify(
+    Object.fromEntries(entries.map(([local, exported]) => [local, exported.name])),
+  )
+}
+
 const host: UserConfig = {
   name: PACKAGE_NAME,
   entry: { index: 'lib/types/index.js' },
@@ -95,8 +112,6 @@ const client: UserConfig = {
           cssModules: { pattern: '[hash]_[local]' },
           minify: true,
         })
-        const classMap: Record<string, string> = {}
-        for (const [local, exported] of Object.entries(cssExports ?? {})) classMap[local] = exported.name
         const tagId = `${PACKAGE_NAME}/${basename(fileId)}`
         return [
           `const css = ${JSON.stringify(code.toString())};`,
@@ -108,7 +123,7 @@ const client: UserConfig = {
           '  tag.textContent = css;',
           '  document.head.appendChild(tag);',
           '}',
-          `export default ${JSON.stringify(classMap)};`,
+          `export default ${serializeCssClassMap(cssExports)};`,
         ].join('\n')
       },
     },
