@@ -10,25 +10,27 @@
 
 - DeepSeek Harness `0.1.0-rc.6`
 - Node.js `^22.19.0` 或 `>=24`
-- `PATH` 中可以找到 `pnpm`，这是 `dsh plugin` 的运行要求
+- `PATH` 中可以找到 `pnpm`，这是 `npx @deepseek-ai/dsh plugin` 的运行要求
 - 只有让任务真正执行 Agent 时才需要配置模型凭据；浏览和编辑看板不需要模型凭据
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:scwlkq/dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web add github:scwlkq/dsh-task-board
 ```
+
+该命令通过 `npx` 运行官方 DSH CLI，无需全局安装 `dsh`。
 
 先确认组合配置只增加一条记录：
 
 ```sh
-dsh --profile web --dump-config
+npx @deepseek-ai/dsh --profile web --dump-config
 ```
 
 输出中应当出现由 `dsh-task-board` 提供的一条 `task-board` Loader 记录。然后启动 Web profile：
 
 ```sh
-dsh web
+npx @deepseek-ai/dsh web
 ```
 
 打开终端输出的本地地址，在侧边栏选择“任务看板”。设置页的插件列表中，本插件只显示为一个 `task-board`，不会分别显示 Host、RPC 和 UI 子包。
@@ -49,13 +51,13 @@ dsh web
 更新已经安装的 Git 依赖：
 
 ```sh
-dsh plugin --profile web update dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web update dsh-task-board
 ```
 
 移除组合包及其 Loader 配置条目：
 
 ```sh
-dsh plugin --profile web remove dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web remove dsh-task-board
 ```
 
 ## 本地开发
@@ -65,7 +67,7 @@ pnpm install
 pnpm run typecheck
 pnpm run build
 pnpm test
-dsh plugin --profile web add .
+npx @deepseek-ai/dsh plugin --profile web add .
 ```
 
 仓库会提交 `lib/` 预构建产物，因此通过 GitHub 安装时不依赖 `prepare`、`install` 或其他生命周期构建脚本。运行 `pnpm pack --dry-run --json` 可以查看 Release tarball 实际包含的预构建运行文件。

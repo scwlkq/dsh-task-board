@@ -10,25 +10,27 @@ The package includes the Host service, Session bridge, generated Typert RPC cont
 
 - DeepSeek Harness `0.1.0-rc.6`
 - Node.js `^22.19.0` or `>=24`
-- `pnpm` available on `PATH`, as required by `dsh plugin`
+- `pnpm` available on `PATH`, as required by `npx @deepseek-ai/dsh plugin`
 - A configured model credential only when a task should run an agent; browsing and editing the board do not require one
 
 ## Install
 
 ```sh
-dsh plugin --profile web add github:scwlkq/dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web add github:scwlkq/dsh-task-board
 ```
+
+This runs the official DSH CLI through `npx`; no global `dsh` installation is required.
 
 Confirm that the bundle contributes one row:
 
 ```sh
-dsh --profile web --dump-config
+npx @deepseek-ai/dsh --profile web --dump-config
 ```
 
 The output contains one `task-board` Loader row supplied by `dsh-task-board`. Start the Web profile:
 
 ```sh
-dsh web
+npx @deepseek-ai/dsh web
 ```
 
 Open the printed local URL, then select **Task Board** in the sidebar. The Settings plugin list shows this extension as one `task-board` entry rather than separate Host, RPC, and UI packages.
@@ -49,13 +51,13 @@ Task records use the profile's DSH storage. Removing the browser plugin does not
 Update the installed Git dependency:
 
 ```sh
-dsh plugin --profile web update dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web update dsh-task-board
 ```
 
 Remove the bundle and its Loader row:
 
 ```sh
-dsh plugin --profile web remove dsh-task-board
+npx @deepseek-ai/dsh plugin --profile web remove dsh-task-board
 ```
 
 ## Develop locally
@@ -65,7 +67,7 @@ pnpm install
 pnpm run typecheck
 pnpm run build
 pnpm test
-dsh plugin --profile web add .
+npx @deepseek-ai/dsh plugin --profile web add .
 ```
 
 The repository commits `lib/` so GitHub installation does not depend on `prepare`, `install`, or another lifecycle build script. `pnpm pack --dry-run --json` shows the same prebuilt runtime files shipped in a release tarball.
