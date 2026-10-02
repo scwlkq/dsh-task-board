@@ -334,7 +334,7 @@ describe('TaskBoardController edge behavior', () => {
     controller.dispose()
     await expect(controller.refresh()).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'task-board controller disposed' },
+      error: { code: 'gateway/internal' },
     })
     await expect(controller.acceptChange({
       boardRevision: 5,
@@ -408,7 +408,7 @@ describe('TaskBoardController edge behavior', () => {
     }))
     await expect(thrown.refresh()).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'snapshot unavailable' },
+      error: { code: 'gateway/internal' },
     })
 
     const pending = deferred<RemoteResult<TaskBoardSnapshotResult>>()
@@ -444,7 +444,7 @@ describe('TaskBoardController edge behavior', () => {
     expect(controller.getSnapshot()).toMatchObject({ creating: false, tasks: [created] })
     await expect(controller.create(createRequest)).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'create transport closed' },
+      error: { code: 'gateway/internal' },
     })
     await expect(controller.uploadAttachment({ mediaType: 'image/png', data: '' })).resolves.toMatchObject({
       ok: false,
@@ -452,7 +452,7 @@ describe('TaskBoardController edge behavior', () => {
     })
     await expect(controller.uploadAttachment({ mediaType: 'image/png', data: '' })).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'upload transport closed' },
+      error: { code: 'gateway/internal' },
     })
   })
 
@@ -490,7 +490,7 @@ describe('TaskBoardController edge behavior', () => {
     })
     await expect(controller.start(first.id)).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'start transport closed' },
+      error: { code: 'gateway/internal' },
     })
     await expect(controller.followup(first.id, 'Continue')).resolves.toMatchObject({ ok: true })
     expect(controller.getSnapshot().tasks[0]?.revision).toBe(3)
@@ -540,7 +540,7 @@ describe('TaskBoardController edge behavior', () => {
     expect(controller.getSnapshot().tasks).toEqual([current])
     await expect(controller.delete(first.id)).resolves.toMatchObject({
       ok: false,
-      error: { code: 'client-operation-failed', message: 'delete transport closed' },
+      error: { code: 'gateway/internal' },
     })
     await expect(controller.delete(first.id)).resolves.toMatchObject({ ok: true })
     expect(controller.getSnapshot().tasks).toEqual([])

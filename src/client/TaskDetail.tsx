@@ -6,7 +6,7 @@ import {
   Modal,
   RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   TaskBoardEditPatch,
   TaskBoardRound,
@@ -286,6 +286,7 @@ export function TaskDetail({
         description={t('detail.retry.fresh.description')}
         acknowledgeLabel={t('detail.retry.fresh.acknowledge')}
         cancelLabel={t('detail.cancel')}
+        closeLabel={t('detail.cancel')}
         confirmLabel={t('detail.retry.fresh.confirm')}
         acknowledged={freshSessionAcknowledged}
         disabled={pending}
@@ -299,6 +300,7 @@ export function TaskDetail({
         description={t('detail.delete.description')}
         acknowledgeLabel={t('detail.delete.acknowledge')}
         cancelLabel={t('detail.cancel')}
+        closeLabel={t('detail.cancel')}
         confirmLabel={t('detail.delete.confirm')}
         acknowledged={deleteAcknowledged}
         disabled={pending}

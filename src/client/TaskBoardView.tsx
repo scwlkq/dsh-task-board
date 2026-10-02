@@ -22,13 +22,13 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import clsx from 'clsx'
 import {
-  IconAgentPresetOutline16,
-  IconChecklistOutline14,
-  IconPlusOutline16,
-  IconSearchOutline16,
+  IconAgentPresetOutlineMedium,
+  IconChecklistOutlineMedium,
+  IconPlusOutlineMedium,
+  IconSearchOutlineMedium,
   Input,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   TaskBoardStatus,
   TaskBoardTask,
@@ -181,7 +181,7 @@ function TaskCard({
           {display.agentPreset && task.agentPreset !== undefined
             ? (
               <span className={css.metaItem}>
-                <IconAgentPresetOutline16 size={12} />
+                <IconAgentPresetOutlineMedium size={12} />
                 {task.agentPreset}
               </span>
             )
@@ -225,7 +225,7 @@ function BoardColumn({
         <h2>{statusLabel(status, t)}</h2>
         <span className={css.count}>{tasks.length}</span>
         <button type="button" className={css.columnAdd} aria-label={`${t('column.create')} ${statusLabel(status, t)}`} onClick={onCreate}>
-          <IconPlusOutline16 />
+          <IconPlusOutlineMedium />
         </button>
       </header>
       <SortableContext items={tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
@@ -244,7 +244,7 @@ function BoardColumn({
           {tasks.length === 0
             ? (
               <button type="button" className={css.emptyColumn} onClick={onCreate}>
-                <IconPlusOutline16 />
+                <IconPlusOutlineMedium />
                 {t('column.empty')}
               </button>
             )
@@ -338,7 +338,7 @@ export function TaskBoardView({
     <div className={css.root}>
       <div className={css.toolbar}>
         <button type="button" className={css.primaryAction} onClick={() => { onCreate() }}>
-          <IconPlusOutline16 />
+          <IconPlusOutlineMedium />
           {t('board.new')}
         </button>
         <Input
@@ -347,7 +347,7 @@ export function TaskBoardView({
           aria-label={t('board.search.aria')}
           placeholder={t('board.search')}
           value={query}
-          icon={<IconSearchOutline16 />}
+          icon={<IconSearchOutlineMedium />}
           data-task-board-search
           className={css.search as string}
           onChange={(event) => { onQueryChange(event.currentTarget.value) }}
@@ -400,7 +400,7 @@ export function TaskBoardView({
         </div>
         <div className={css.viewSwitch} aria-label={t('view.switch')}>
           <button type="button" aria-pressed={viewMode === 'board'} onClick={() => { onViewModeChange('board') }}>
-            <IconChecklistOutline14 />
+            <IconChecklistOutlineMedium />
             {t('board.view.board')}
           </button>
           <button type="button" aria-pressed={viewMode === 'list'} onClick={() => { onViewModeChange('list') }}>

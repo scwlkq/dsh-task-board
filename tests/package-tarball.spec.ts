@@ -14,7 +14,13 @@ interface PackResult {
 }
 
 function packedPaths(): readonly string[] {
-  const output = execFileSync('pnpm', ['pack', '--dry-run', '--json'], {
+  // `pnpm` is a `.cmd` shim on Windows, which execFileSync cannot spawn
+  // directly; route it through the platform shell so the tarball check runs on
+  // every supported platform.
+  const [command, args] = process.platform === 'win32'
+    ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'pnpm pack --dry-run --json']]
+    : ['pnpm', ['pack', '--dry-run', '--json']]
+  const output = execFileSync(command, args, {
     cwd: root,
     encoding: 'utf8',
   })

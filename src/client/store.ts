@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-client-ui-task-board/client/store
  */
 
-import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-runtime/client'
+import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type {
   TaskBoardRoundId,
   TaskBoardStatus,

@@ -14,6 +14,7 @@ const CLIENT_EXTERNALS = [
   'react-dom',
   '@deepseek-ai/dsh-client-runtime/client',
   '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-store',
 ]
 const CLIENT_BUNDLED_DEPENDENCIES = [
   '@dnd-kit/accessibility',
@@ -22,6 +23,7 @@ const CLIENT_BUNDLED_DEPENDENCIES = [
   '@dnd-kit/utilities',
   '@tanstack/react-virtual',
   '@tanstack/virtual-core',
+  '@deepseek-ai/dsh-typert-protocol',
   'clsx',
   'zod',
 ]

@@ -3,8 +3,9 @@
  * @module @deepseek-ai/dsh-client-ui-task-board/client/slots
  */
 
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { WorkspaceSource } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   HostObservable,
   InjectFace,
@@ -47,6 +48,8 @@ export interface TaskBoardInjected {
   }
   refresh: () => Promise<TaskBoardClientResult<readonly TaskBoardTask[]>>
   loadAgentPresets: () => Promise<readonly TaskBoardAgentPresetOption[]>
+  /** Reactive Host-authoritative Workspace projection (bare observable source). */
+  workspaces: WorkspaceSource
   pickDirectory: () => Promise<string | null>
   uploadAttachment: (request: TaskBoardAttachmentUploadRequest) => Promise<TaskBoardClientResult<ImageAttachmentRef>>
   create: (request: TaskBoardCreateRequest) => Promise<TaskBoardClientResult<TaskBoardTask>>

@@ -1,6 +1,6 @@
 /** Sidebar task-board launcher. */
 
-import { IconChecklistOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChecklistOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskBoardLauncherProps } from './slots.ts'
 import css from './TaskBoardLauncher.module.css'
 
@@ -35,7 +35,7 @@ export function TaskBoardLauncher({
       }}
     >
       <span className={css.icon} aria-hidden="true">
-        <IconChecklistOutline14 />
+        <IconChecklistOutlineMedium />
       </span>
       {wide ? <span className={css.label}>{t('launcher')}</span> : null}
       {active > 0

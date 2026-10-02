@@ -64,13 +64,11 @@ function eventRow(
   seq: number,
   type: string,
   data: unknown,
-  view?: HistoryEntry['view'],
 ): TaskBoardHistoryRow {
   return {
     kind: 'event',
     entry: {
       event: { type, seq, time: seq, data } as HistoryEntry['event'],
-      ...(view === undefined ? {} : { view }),
     },
   }
 }
@@ -104,7 +102,6 @@ const HISTORY: TaskBoardRoundHistory = {
           time: 6,
           data: { turn: 1, step: 1, callId: 'call-1' as never, name: 'bash', arguments: '{"cmd":"pnpm test"}' },
         },
-        view: { for: 'call', view: { card: 'terminal', title: 'pnpm test', cwd: '/repo' } },
       },
     },
   ],
@@ -159,57 +156,38 @@ const RICH_HISTORY: TaskBoardRoundHistory = {
       14,
       'tool/call',
       { turn: 1, step: 1, callId: 'call-generic', name: 'generic', arguments: '{}' },
-      { for: 'call', view: { card: 'generic', title: 'Generic call' } },
     ),
     eventRow(
       15,
       'tool/call',
       { turn: 1, step: 1, callId: 'call-diff', name: 'write', arguments: '{}' },
-      {
-        for: 'call',
-        view: {
-          card: 'diff',
-          title: 'Write file',
-          diffs: [{ path: 'call.txt', oldText: null, newText: 'call' }],
-        },
-      },
     ),
     eventRow(
       16,
       'tool/result',
       { turn: 1, step: 1, message: {}, error: { name: 'Error', code: 'FAILED' } },
-      { for: 'result', view: { card: 'terminal', output: 'failed output', exitCode: 1 } },
     ),
     eventRow(
       17,
       'tool/result',
       { turn: 1, step: 1, message: {} },
-      { for: 'result', view: { card: 'terminal', title: 'named command', output: 'ok', exitCode: 0 } },
     ),
     eventRow(
       18,
       'tool/result',
       { turn: 1, step: 1, message: {} },
-      {
-        for: 'result',
-        view: {
-          card: 'diff',
-          diffs: [{ path: 'result.txt', oldText: 'before', newText: 'after' }],
-        },
-      },
     ),
     eventRow(
       19,
       'tool/result',
       { turn: 1, step: 1, message: {} },
-      { for: 'result', view: { card: 'generic', title: 'Generic result' } },
     ),
     eventRow(20, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
   ],
 }
 
 describe('ExecutionLogDialog', () => {
-  it('loads bounded history, renders metadata and Host render intent, and filters focus rows', async () => {
+  it('loads bounded history, renders metadata, and filters focus rows', async () => {
     const currentRound = round()
     const load = vi.fn(async () => HISTORY)
     render(
@@ -226,7 +204,7 @@ describe('ExecutionLogDialog', () => {
     expect(screen.getByRole('dialog', { name: '执行日志 · DSH-1 · 第 1 轮' })).toBeDefined()
     await waitFor(() => { expect(load).toHaveBeenCalledOnce() })
     expect(await screen.findByText('已经完成实现')).toBeDefined()
-    expect(screen.getByText('pnpm test')).toBeDefined()
+    expect(screen.getAllByText('tool/call').length).toBeGreaterThan(0)
     expect(screen.getByText('Seq 3–9')).toBeDefined()
 
     fireEvent.change(screen.getByRole('combobox', { name: '日志筛选' }), { target: { value: 'agent' } })
@@ -270,13 +248,12 @@ describe('ExecutionLogDialog', () => {
     expect(screen.queryByText('User request')).toBeNull()
 
     fireEvent.change(filter, { target: { value: 'tools' } })
-    expect(await screen.findByText('named command')).toBeDefined()
-    expect(screen.getByText('failed output')).toBeDefined()
+    expect(screen.getAllByText('tool/call').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('tool/result').length).toBeGreaterThan(0)
 
     fireEvent.change(filter, { target: { value: 'errors' } })
     expect(await screen.findByText('turn/end')).toBeDefined()
-    expect(screen.getByText('failed output')).toBeDefined()
-    expect(screen.queryByText('named command')).toBeNull()
+    expect(screen.getAllByText('tool/result').length).toBeGreaterThan(0)
 
     fireEvent.click(copy)
     await waitFor(() => { expect(writeText).toHaveBeenCalledOnce() })

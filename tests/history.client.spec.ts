@@ -1,20 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HistoryEntry, IApiClient, SessionId } from '@deepseek-ai/dsh-client-connection/client'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type {
+  SessionHistoryRecord,
+  SessionPageRequest,
+  SessionWireEvent,
+} from '@deepseek-ai/dsh-api-session-controller/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TaskBoardRound, TaskBoardRoundId } from '../src/types.ts'
 import { loadRoundHistory, type TaskBoardHistoryApi } from '../src/client/history.ts'
 
-function entry(event: SessionEvent): HistoryEntry {
-  return { event }
+function entry(event: SessionWireEvent): SessionHistoryRecord {
+  return { type: 'event', event }
 }
 
-function boundary(seq: number, type: 'turn/start' | 'turn/end'): HistoryEntry {
+function boundary(seq: number, type: 'turn/start' | 'turn/end'): SessionHistoryRecord {
   return entry(type === 'turn/start'
     ? { type, seq, time: seq, data: { turn: 1 } }
     : { type, seq, time: seq, data: { turn: 1, reason: { kind: 'completed' } } })
 }
 
-function chunk(seq: number, type: 'text-delta' | 'reasoning-delta', text: string): HistoryEntry {
+function chunk(seq: number, type: 'text-delta' | 'reasoning-delta', text: string): SessionHistoryRecord {
   return entry({
     type: 'assistant/chunk',
     seq,
@@ -23,7 +27,7 @@ function chunk(seq: number, type: 'text-delta' | 'reasoning-delta', text: string
   })
 }
 
-function toolChunk(seq: number): HistoryEntry {
+function toolChunk(seq: number): SessionHistoryRecord {
   return entry({
     type: 'assistant/chunk',
     seq,
@@ -64,53 +68,48 @@ function roundWithoutSequence(overrides: Partial<TaskBoardRound> = {}): TaskBoar
 }
 
 function api(pages: readonly {
-  readonly events: readonly HistoryEntry[]
+  readonly records: readonly SessionHistoryRecord[]
   readonly hasMore: boolean
 }[]) {
   let index = 0
-  const history = vi.fn<IApiClient['sessions']['history']>(async () => {
-    const page = pages[index++] ?? { events: [], hasMore: false }
+  const page = vi.fn(async () => {
+    const value = pages[index++] ?? { records: [], hasMore: false }
     return {
-      rpcId: `history-${index}` as never,
-      result: { ok: true as const, value: { events: [...page.events], hasMore: page.hasMore } },
+      ok: true as const,
+      value: { records: [...value.records], hasMore: value.hasMore },
     }
   })
-  return { history, client: { sessions: { history } } satisfies TaskBoardHistoryApi }
+  return { page, client: { session: { page } } satisfies TaskBoardHistoryApi }
 }
 
 describe('loadRoundHistory', () => {
-  it('pages backward to the round start, excludes surrounding turns, and preserves views', async () => {
-    const rendered: HistoryEntry = {
-      ...boundary(6, 'turn/start'),
-      view: { for: 'call', view: { card: 'terminal', title: 'Rendered call' } },
-    }
+  it('pages backward to the round start and excludes surrounding turns', async () => {
     const source = api([
-      { events: [rendered, boundary(7, 'turn/end'), boundary(8, 'turn/end'), boundary(9, 'turn/start')], hasMore: true },
-      { events: [boundary(2, 'turn/end'), boundary(3, 'turn/start'), boundary(4, 'turn/start'), boundary(5, 'turn/end')], hasMore: true },
+      { records: [boundary(6, 'turn/start'), boundary(7, 'turn/end'), boundary(8, 'turn/end'), boundary(9, 'turn/start')], hasMore: true },
+      { records: [boundary(2, 'turn/end'), boundary(3, 'turn/start'), boundary(4, 'turn/start'), boundary(5, 'turn/end')], hasMore: true },
     ])
 
     const result = await loadRoundHistory(source.client, round(), undefined, { pageSize: 4, maxEvents: 20 })
 
-    expect(source.history).toHaveBeenNthCalledWith(1, {
-      sessionId: 'session-1',
+    expect(source.page).toHaveBeenNthCalledWith(1, {
+      address: { kind: 'session', sessionId: 'session-1' },
+      throughSeq: 8,
       maxMessages: 4,
     }, undefined)
-    expect(source.history).toHaveBeenNthCalledWith(2, {
-      sessionId: 'session-1',
+    expect(source.page).toHaveBeenNthCalledWith(2, {
+      address: { kind: 'session', sessionId: 'session-1' },
+      throughSeq: 8,
       beforeSeq: 6,
       maxMessages: 4,
     }, undefined)
     expect(result.rows.flatMap(row => row.kind === 'event' ? [row.entry.event.seq] : [row.startSeq, row.endSeq])).toEqual([
       3, 4, 5, 6, 7, 8,
     ])
-    expect(result.rows.find(row => row.kind === 'event' && row.entry.event.seq === 6)).toMatchObject({
-      entry: { view: { for: 'call', view: { title: 'Rendered call' } } },
-    })
     expect(result).toMatchObject({ startSeq: 3, endSeq: 8, truncated: false })
   })
 
   it('coalesces adjacent assistant deltas without dropping reasoning', async () => {
-    const source = api([{ events: [
+    const source = api([{ records: [
       boundary(3, 'turn/start'),
       chunk(4, 'reasoning-delta', 'think '),
       chunk(5, 'reasoning-delta', 'again'),
@@ -134,7 +133,7 @@ describe('loadRoundHistory', () => {
   })
 
   it('retains non-text assistant chunks in the stream evidence', async () => {
-    const source = api([{ events: [
+    const source = api([{ records: [
       boundary(3, 'turn/start'),
       toolChunk(4),
       boundary(5, 'turn/end'),
@@ -151,7 +150,7 @@ describe('loadRoundHistory', () => {
   })
 
   it('uses the first admitted prompt when the round start sequence is absent', async () => {
-    const source = api([{ events: [boundary(3, 'turn/start'), boundary(4, 'turn/end')], hasMore: false }])
+    const source = api([{ records: [boundary(3, 'turn/start'), boundary(4, 'turn/end')], hasMore: false }])
     const result = await loadRoundHistory(source.client, roundWithoutSequence({
       prompts: [{
         id: 'prompt-1' as never,
@@ -168,33 +167,30 @@ describe('loadRoundHistory', () => {
   })
 
   it('loads one unbounded page when no round sequence evidence exists', async () => {
-    const source = api([{ events: [boundary(1, 'turn/start')], hasMore: false }])
+    const source = api([{ records: [boundary(1, 'turn/start')], hasMore: false }])
     const result = await loadRoundHistory(source.client, roundWithoutSequence())
 
-    expect(source.history).toHaveBeenCalledOnce()
+    expect(source.page).toHaveBeenCalledOnce()
     expect(result).toMatchObject({ startSeq: undefined, endSeq: undefined, truncated: false })
   })
 
   it('surfaces Session history API failures', async () => {
-    const history = vi.fn<IApiClient['sessions']['history']>(async () => ({
-      rpcId: 'history-error' as never,
-      result: {
-        ok: false as const,
-        error: {
-          code: 'session-not-found',
-          message: 'Session is unavailable.',
-          details: { sessionId: 'session-1' as SessionId },
-        },
+    const page = vi.fn(async () => ({
+      ok: false as const,
+      error: {
+        code: 'session-not-found',
+        message: 'Session is unavailable.',
+        details: { sessionId: 'session-1' as SessionId },
       },
     }))
 
-    await expect(loadRoundHistory({ sessions: { history } }, round())).rejects.toThrow(
+    await expect(loadRoundHistory({ session: { page } }, round())).rejects.toThrow(
       'session-not-found: Session is unavailable.',
     )
   })
 
   it('caps loaded events and marks the projection truncated', async () => {
-    const source = api([{ events: [
+    const source = api([{ records: [
       boundary(3, 'turn/start'),
       boundary(4, 'turn/start'),
       boundary(5, 'turn/start'),
@@ -212,17 +208,17 @@ describe('loadRoundHistory', () => {
 
   it('passes cancellation to every page and aborts before another request', async () => {
     const controller = new AbortController()
-    const history = vi.fn<IApiClient['sessions']['history']>(async (_payload, signal) => {
+    const page = vi.fn(async (_request: SessionPageRequest, signal?: AbortSignal) => {
       controller.abort()
       signal?.throwIfAborted()
       return {
-        rpcId: 'history' as never,
-        result: { ok: true as const, value: { events: [], hasMore: false } },
+        ok: true as const,
+        value: { records: [], hasMore: false },
       }
     })
 
-    await expect(loadRoundHistory({ sessions: { history } } satisfies TaskBoardHistoryApi, round(), controller.signal))
+    await expect(loadRoundHistory({ session: { page } } satisfies TaskBoardHistoryApi, round(), controller.signal))
       .rejects.toMatchObject({ name: 'AbortError' })
-    expect(history).toHaveBeenCalledOnce()
+    expect(page).toHaveBeenCalledOnce()
   })
 })

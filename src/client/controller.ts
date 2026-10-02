@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-client-ui-task-board/client/controller
  */
 
-import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteFailure, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
@@ -99,11 +99,7 @@ function ordered(tasks: readonly TaskBoardTask[]): readonly TaskBoardTask[] {
 }
 
 function transportError(error: unknown): RemoteFailure {
-  return {
-    code: 'client-operation-failed',
-    message: error instanceof Error ? error.message : String(error),
-    details: {},
-  }
+  return new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {})
 }
 
 function notFound(taskId: TaskBoardTaskId): TaskBoardClientResult<never> {

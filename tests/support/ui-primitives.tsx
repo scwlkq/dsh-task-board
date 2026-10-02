@@ -148,3 +148,11 @@ export const IconRefreshOutline16 = Icon
 export const IconAgentPresetOutline16 = Icon
 export const IconPlusOutline16 = Icon
 export const IconSearchOutline16 = Icon
+
+// Medium variants used by the ported client views (0.1.7-rc.2 icon set).
+export const IconChecklistOutlineMedium = Icon
+export const IconCloseOutlineMedium = Icon
+export const IconRefreshOutlineMedium = Icon
+export const IconAgentPresetOutlineMedium = Icon
+export const IconPlusOutlineMedium = Icon
+export const IconSearchOutlineMedium = Icon

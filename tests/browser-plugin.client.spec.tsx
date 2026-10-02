@@ -1,8 +1,8 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SlotRegistry, type IWorkspaces } from '@deepseek-ai/dsh-client-runtime/client'
-import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { TaskBoardSnapshotResult } from '../src/types.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { TaskBoardLauncher } from '../src/client/TaskBoardLauncher.tsx'
@@ -15,6 +15,10 @@ class TracedRemote extends Service {
   constructor(ctx: Context) {
     super(ctx, 'remote')
   }
+
+  agentPresets = { list: vi.fn() }
+  session = { page: vi.fn() }
+  directoryPicker = { pick: vi.fn() }
 
   async $mount(): Promise<() => Promise<void>> {
     return async () => {}
@@ -76,25 +80,30 @@ async function bench() {
     unmountRemote.mockImplementationOnce(async () => { await namespace.dispose() })
     return unmountRemote
   })
-  const sessions = { open: vi.fn() }
+  const sessions = { retain: vi.fn() }
   ctx.provide('sessions', sessions as never)
-  const workspaces = { pickDirectory: vi.fn<IWorkspaces['pickDirectory']>(async () => null) }
+  // 0.1.7-rc.2: ctx.workspaces.list is a bare observable source; the overlay
+  // projects its snapshot items. Provide an empty ready list for the harness.
+  const workspaceSnapshot = vi.fn(() => ({ items: [] as readonly WorkspaceView[], state: 'ready', phase: 'ready', error: null, archivedSessionIds: [], pinnedSessionIds: [] }))
+  const workspaces = { list: { getSnapshot: workspaceSnapshot, subscribe: () => () => {} } }
   ctx.provide('workspaces', workspaces as never)
-  const agentPresets = vi.fn<IApiClient['agentPresets']['list']>(async () => ({
-    rpcId: 'presets' as never,
-    result: { ok: true as const, value: { presets: [], authorable: false, hasDocument: false } },
+  // Declared by `inject` for harness parity; the port no longer reads this seam.
+  ctx.provide('connection', {} as never)
+  const agentPresets = vi.fn(async () => ({
+    ok: true as const,
+    value: { presets: [] },
   }))
-  const history = vi.fn<IApiClient['sessions']['history']>(async () => ({
-    rpcId: 'history' as never,
-    result: { ok: true as const, value: { events: [], hasMore: false } },
+  const sessionPage = vi.fn(async () => ({
+    ok: true as const,
+    value: { records: [], hasMore: false },
   }))
-  const connection = {
-    api: {
-      agentPresets: { list: agentPresets },
-      sessions: { history },
-    },
-  }
-  ctx.provide('connection', connection as never)
+  const directoryPicker = vi.fn(async () => ({
+    ok: true as const,
+    value: null,
+  }))
+  forwarded.agentPresets = { list: agentPresets }
+  forwarded.session = { page: sessionPage }
+  forwarded.directoryPicker = { pick: directoryPicker }
   const slots = ctx.get('slots') as SlotRegistry
   slots.register({
     name: 'root',
@@ -113,13 +122,13 @@ async function bench() {
   await fiber.await()
   return {
     agentPresets,
-    connection,
     ctx,
+    directoryPicker,
     fiber,
     forwarded,
-    history,
     locale,
     mountRemote,
+    sessionPage,
     sessions,
     slots,
     taskBoard,
@@ -184,27 +193,21 @@ describe('ui-task-board browser plugin', () => {
     const entry = b.slots.entries('shell.overlay')[0]!
     const face = entry.inject?.() as unknown as TaskBoardInjected
     b.agentPresets.mockResolvedValueOnce({
-      rpcId: 'presets-populated' as never,
-      result: {
-        ok: true as const,
-        value: {
-          presets: [
-            { id: 'standard', trust: 'system' as const, isDefault: true, name: 'Standard', description: 'Default preset' },
-            { id: 'minimal', trust: 'user' as const, isDefault: false },
-            { id: 'broken', trust: 'user' as const, isDefault: false, broken: 'invalid config' },
-          ],
-          authorable: false,
-          hasDocument: true,
-        },
+      ok: true as const,
+      value: {
+        presets: [
+          { id: 'standard', isDefault: true, name: 'Standard', description: 'Default preset' },
+          { id: 'minimal', isDefault: false },
+          { id: 'broken', isDefault: false, broken: 'invalid config' },
+        ],
       },
     })
-    b.workspaces.pickDirectory.mockResolvedValueOnce('/tmp/workspace')
 
     await expect(face.loadAgentPresets()).resolves.toEqual([
       { id: 'standard', isDefault: true, name: 'Standard', description: 'Default preset' },
       { id: 'minimal', isDefault: false },
     ])
-    await expect(face.pickDirectory()).resolves.toBe('/tmp/workspace')
+    await expect(face.pickDirectory()).resolves.toBeNull()
     await face.uploadAttachment({ mediaType: 'image/png', data: '' })
     await face.create({ title: '', description: 'Create', acceptanceCriteria: '', start: false })
     const missing = 'missing-task' as never
@@ -232,19 +235,16 @@ describe('ui-task-board browser plugin', () => {
 
     expect(b.taskBoard.uploadAttachment).toHaveBeenCalledOnce()
     expect(b.taskBoard.create).toHaveBeenCalledOnce()
-    expect(b.history).toHaveBeenCalledOnce()
-    expect(b.sessions.open).toHaveBeenCalledWith('session-1')
+    expect(b.sessionPage).toHaveBeenCalledOnce()
+    expect(b.sessions.retain).toHaveBeenCalledWith('session-1', { source: 'task-board' })
   })
 
   it('surfaces Agent Preset list failures', async () => {
     const b = await bench()
     const face = b.slots.entries('shell.overlay')[0]!.inject?.() as unknown as TaskBoardInjected
     b.agentPresets.mockResolvedValueOnce({
-      rpcId: 'presets-error' as never,
-      result: {
-        ok: false as const,
-        error: { code: 'bad-request', message: 'Preset document is invalid.', details: { issues: [] } },
-      },
+      ok: false as const,
+      error: { code: 'bad-request', message: 'Preset document is invalid.', details: { issues: [] } },
     })
 
     await expect(face.loadAgentPresets()).rejects.toThrow('Preset document is invalid.')

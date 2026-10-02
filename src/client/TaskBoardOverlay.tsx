@@ -1,9 +1,9 @@
 /** Full-frame task-board overlay shell. */
 
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import {
-  IconCloseOutline16,
-  IconRefreshOutline16,
+  IconCloseOutlineMedium,
+  IconRefreshOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CreateTaskDialog } from './CreateTaskDialog.tsx'
 import { taskBoardErrorMessage } from './controller.ts'
@@ -11,6 +11,7 @@ import { TaskBoardView } from './TaskBoardView.tsx'
 import { TaskDetail } from './TaskDetail.tsx'
 import { ExecutionLogDialog } from './ExecutionLogDialog.tsx'
 import type { TaskBoardOverlayProps } from './slots.ts'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import css from './TaskBoardOverlay.module.css'
 
 /**
@@ -24,6 +25,7 @@ export function TaskBoardOverlay({
   useBoard,
   refresh,
   loadAgentPresets,
+  workspaces,
   pickDirectory,
   uploadAttachment,
   create,
@@ -39,7 +41,6 @@ export function TaskBoardOverlay({
   delete: deleteTask,
   openSession,
   loadRoundHistory,
-  useWorkspaces,
   t,
 }: TaskBoardOverlayProps) {
   const open = useStore(state => state.open)
@@ -57,7 +58,13 @@ export function TaskBoardOverlay({
   const pendingTaskIds = useBoard(view => view.pendingTaskIds)
   const creating = useBoard(view => view.creating)
   const error = useBoard(view => view.error)
-  const workspaces = useWorkspaces(state => state.items)
+  // 0.1.7-rc.2: project the Host-authoritative workspace rows reactively from
+  // the injected ctx.workspaces.list source (the old useWorkspaces selector
+  // hook is gone). useSyncExternalStore keeps the list live on follow frames.
+  const workspaceList: readonly WorkspaceView[] = useSyncExternalStore(
+    workspaces.subscribe,
+    () => workspaces.getSnapshot().items,
+  )
   const selectedTask = selectedTaskId === null
     ? undefined
     : tasks.find(task => task.id === selectedTaskId)
@@ -103,10 +110,10 @@ export function TaskBoardOverlay({
         </div>
         <div className={css.actions}>
           <button type="button" className={css.iconButton} aria-label={t('board.refresh')} onClick={() => { void refresh() }}>
-            <IconRefreshOutline16 />
+            <IconRefreshOutlineMedium />
           </button>
           <button type="button" className={css.iconButton} aria-label={t('board.close')} onClick={() => { actions.close() }}>
-            <IconCloseOutline16 />
+            <IconCloseOutlineMedium />
           </button>
         </div>
       </header>
@@ -125,7 +132,7 @@ export function TaskBoardOverlay({
               <TaskBoardView
                 tasks={tasks}
                 pendingTaskIds={pendingTaskIds}
-                workspaces={workspaces}
+                workspaces={workspaceList}
                 query={query}
                 statusFilter={statusFilter}
                 locationFilter={locationFilter}
@@ -148,7 +155,7 @@ export function TaskBoardOverlay({
       <CreateTaskDialog
         open={createOpen}
         creating={creating}
-        workspaces={workspaces}
+        workspaces={workspaceList}
         t={t}
         loadAgentPresets={loadAgentPresets}
         pickDirectory={pickDirectory}
@@ -160,7 +167,7 @@ export function TaskBoardOverlay({
         task={selectedTask}
         pending={selectedTaskId !== null && pendingTaskIds.includes(selectedTaskId)}
         covered={selectedRound !== undefined}
-        workspaces={workspaces}
+        workspaces={workspaceList}
         t={t}
         onClose={() => { actions.selectTask(null) }}
         start={start}

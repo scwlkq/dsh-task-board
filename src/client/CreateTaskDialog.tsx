@@ -6,7 +6,7 @@ import {
   Button,
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   ImageAttachmentRef,
   ImageMediaType,

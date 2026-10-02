@@ -5,10 +5,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import {
   createSnapshotStore,
-  type SessionListState,
   type WorkspaceId,
-  type WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
   TaskBoardCreateRequest,
@@ -70,38 +69,18 @@ const TASKS: readonly TaskBoardTask[] = [
   }),
 ]
 
-function emptySessions() {
-  const store = createSnapshotStore<SessionListState>({
-    ids: [],
-    byId: {},
-    current: undefined,
-    phase: 'ready',
-    subagentsByParent: {},
-    jobsBySession: {},
-    currentAddress: undefined,
-  })
-  return bindSnapshotSelector(store)
+function workspaces(items: WorkspaceView[] = []): { getSnapshot: () => { items: WorkspaceView[] }; subscribe: () => () => void } {
+  return { getSnapshot: () => ({ items }), subscribe: () => () => {} }
 }
 
-function workspaces() {
-  const store = createSnapshotStore<WorkspaceListState>({
-    items: [{
-      workspaceId: 'workspace-1' as WorkspaceId,
-      title: 'Harness',
-      path: '/repo/harness',
-      sessionIds: [],
-      createdAt: '2026-08-14T00:00:00.000Z',
-      updatedAt: '2026-08-14T00:00:00.000Z',
-    }],
-    archivedSessionIds: [],
-    state: 'idle',
-    phase: 'ready',
-    error: null,
-    baselinesReady: true,
-    recentWorkspaceId: 'workspace-1' as WorkspaceId,
-  })
-  return bindSnapshotSelector(store)
-}
+const WORKSPACES: readonly WorkspaceView[] = [{
+  workspaceId: 'workspace-1' as WorkspaceId,
+  title: 'Harness',
+  path: '/repo/harness',
+  sessionIds: [],
+  createdAt: '2026-08-14T00:00:00.000Z',
+  updatedAt: '2026-08-14T00:00:00.000Z',
+}]
 
 function success<T>(value: T) {
   return Promise.resolve({ ok: true as const, value })
@@ -135,11 +114,10 @@ function mount(
     return success(created)
   })
   const props: TaskBoardOverlayProps = {
-    useSessions: emptySessions(),
-    useWorkspaces: workspaces(),
     useStore: bindSnapshotSelector(ui),
     actions: ui.actions,
     useBoard: bindSnapshotSelector(board),
+    workspaces: workspaces(),
     refresh: vi.fn(async () => ({ ok: true as const, value: tasks })),
     loadAgentPresets: vi.fn(async () => [
       { id: 'standard', name: '标准 Agent', isDefault: true },
@@ -286,24 +264,26 @@ describe('TaskBoardOverlay Multica-style board', () => {
     expect(screen.getByText('Acceptance 1')).toBeDefined()
   })
 
-  it('opens an agent-first create dialog and submits create-only Workspace task', async () => {
+  it('opens an agent-first create dialog and submits create-only task with a directory', async () => {
     const b = mount([])
     fireEvent.click(screen.getByRole('button', { name: '新建任务' }))
 
     const dialog = screen.getByRole('dialog', { name: '新建任务' })
     expect(dialog).toBeDefined()
     expect(within(dialog).getByRole('tab', { name: 'Agent 任务' }).getAttribute('aria-selected')).toBe('true')
+    expect((within(dialog).getByRole('radio', { name: '指定目录' }) as HTMLInputElement).checked).toBe(true)
     fireEvent.change(within(dialog).getByLabelText('任务要求'), { target: { value: '实现任务面板' } })
     fireEvent.change(within(dialog).getByLabelText('验收标准'), { target: { value: '五种状态均可见' } })
     await within(dialog).findByRole('option', { name: '精简 Agent — minimal' })
     fireEvent.change(within(dialog).getByLabelText('Agent Preset'), { target: { value: 'minimal' } })
+    fireEvent.change(within(dialog).getByLabelText('工作目录'), { target: { value: '/repo/harness' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '仅创建' }))
 
     await waitFor(() => {
       expect(b.create).toHaveBeenCalledWith({
         description: '实现任务面板',
         acceptanceCriteria: '五种状态均可见',
-        workspaceId: 'workspace-1',
+        cwd: '/repo/harness',
         agentPreset: 'minimal',
         start: false,
       })
@@ -394,48 +374,32 @@ describe('TaskBoardOverlay Multica-style board', () => {
     })
   })
 
-  it('preserves an open creation draft when the Workspace roster changes', () => {
-    const workspaceStore = createSnapshotStore<WorkspaceListState>({
-      items: [{
-        workspaceId: 'workspace-1' as WorkspaceId,
-        title: 'Harness',
-        path: '/repo/harness',
-        sessionIds: [],
-        createdAt: '2026-08-14T00:00:00.000Z',
-        updatedAt: '2026-08-14T00:00:00.000Z',
-      }],
-      archivedSessionIds: [],
-      state: 'idle',
-      phase: 'ready',
-      error: null,
-      baselinesReady: true,
-      recentWorkspaceId: 'workspace-1' as WorkspaceId,
-    })
-    mount([], { useWorkspaces: bindSnapshotSelector(workspaceStore) })
+  it('defaults to directory location without a Workspace roster and preserves the draft across re-renders', () => {
+    const mounted = mount([])
     fireEvent.click(screen.getByRole('button', { name: '新建任务' }))
     const dialog = screen.getByRole('dialog', { name: '新建任务' })
+    expect((within(dialog).getByRole('radio', { name: 'Workspace' }) as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialog).getByRole('radio', { name: '指定目录' }) as HTMLInputElement).checked).toBe(true)
     fireEvent.change(within(dialog).getByLabelText('任务要求'), {
       target: { value: '保留尚未提交的创建草稿' },
     })
 
-    act(() => {
-      workspaceStore.set({
-        ...workspaceStore.getSnapshot(),
-        items: [{
-          workspaceId: 'workspace-2' as WorkspaceId,
-          title: 'Second',
-          path: '/repo/second',
-          sessionIds: [],
-          createdAt: '2026-08-14T00:01:00.000Z',
-          updatedAt: '2026-08-14T00:01:00.000Z',
-        }, ...workspaceStore.getSnapshot().items],
-      })
-    })
+    mounted.view.rerender(<TaskBoardOverlay {...mounted.props} />)
 
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>('任务要求').value)
       .toBe('保留尚未提交的创建草稿')
-    expect(within(dialog).getByRole<HTMLSelectElement>('combobox', { name: 'Workspace' }).value)
-      .toBe('workspace-1')
+    expect((within(dialog).getByRole('radio', { name: '指定目录' }) as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('defaults to the first Workspace when the roster is present', () => {
+    const mounted = mount([], { workspaces: workspaces([...WORKSPACES]) })
+    fireEvent.click(screen.getByRole('button', { name: '新建任务' }))
+    const dialog = screen.getByRole('dialog', { name: '新建任务' })
+    expect((within(dialog).getByRole('radio', { name: 'Workspace' }) as HTMLInputElement).disabled).toBe(false)
+    expect((within(dialog).getByRole('radio', { name: 'Workspace' }) as HTMLInputElement).checked).toBe(true)
+    expect((within(dialog).getByRole('radio', { name: '指定目录' }) as HTMLInputElement).checked).toBe(false)
+    expect((within(dialog).getByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement).value).toBe('workspace-1')
+    expect(within(dialog).getByText('Harness — /repo/harness')).toBeDefined()
   })
 
   it('closes only the innermost task-board layer with Escape', () => {

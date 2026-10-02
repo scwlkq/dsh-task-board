@@ -917,7 +917,12 @@ export class TaskBoardService extends TypertRemoteService {
     let events: readonly SessionEvent[]
     try {
       const live = this.ctx.sessions.get(task.currentSessionId)
-      events = live?.events ?? (await this.ctx.sessionPersistence.inspect(task.currentSessionId)).events
+      if (live !== undefined) {
+        events = live.snapshotEvents()
+      } else {
+        const handle = await this.ctx.sessionPersistence.open(task.currentSessionId as SessionId, 'read')
+        events = (await handle.read()).events
+      }
     } catch {
       const failed = reconcileRound(task, {
         kind: 'failed',

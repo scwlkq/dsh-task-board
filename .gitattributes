@@ -1,3 +1,22 @@
+# Normalize line endings to LF across all operating systems so that
+# byte-level and content-hash assertions stay deterministic regardless of the
+# developer's core.autocrlf setting.
+* text eol=lf
+
+# Keep any future binary artifacts safe from EOL/working-tree conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.gz binary
+
 lib/client.js linguist-generated=true whitespace=-trailing-space
 lib/client.js.map linguist-generated=true
 lib/index.js linguist-generated=true

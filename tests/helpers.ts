@@ -5,8 +5,14 @@ import { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef, SaveImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Invariants from '@deepseek-ai/dsh-invariants'
-import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
-import type { RpcError, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
+import type {
+  SessionCancelRequest,
+  SessionCancelValue,
+  SessionCreateRequest,
+  SessionCreateValue,
+  SessionPromptRequest,
+  SessionPromptValue,
+} from '@deepseek-ai/dsh-api-session-controller/types'
 import {
   SESSION_FORMAT_VERSION,
   Session,
@@ -28,12 +34,21 @@ interface TestAgent {
   whenIdle(): Promise<void>
 }
 
-function rpcOk<T>(request: RpcRequest<unknown>, value: T) {
-  return { rpcId: request.rpcId, result: { ok: true as const, value } }
+/** Business failure vocabulary exercised through the Session Controller. */
+interface TestProviderError {
+  readonly code: string
+  readonly message: string
+  readonly details?: Record<string, unknown>
 }
 
-function rpcError(request: RpcRequest<unknown>, error: RpcError) {
-  return { rpcId: request.rpcId, result: { ok: false as const, error } }
+/** Throw a RemoteError-shaped failure as rebuilt across the Remote wire. */
+function providerError(error: TestProviderError): never {
+  throw {
+    code: error.code,
+    message: error.message,
+    details: error.details ?? {},
+    isDSHRemoteError: true,
+  } as never
 }
 
 /** Controllable ApiProxy with real Session records and event envelopes. */
@@ -42,120 +57,125 @@ class ControlledSessionRuntime {
   readonly agents = new Map<SessionIdType, TestAgent>()
   readonly savedImages: SaveImageAttachment[] = []
   private readonly storedImages = new Map<string, { ref: ImageAttachmentRef; data: Uint8Array }>()
-  readonly calls: Array<{ readonly method: 'session.create' | 'session.prompt' | 'session.cancel'; readonly request: RpcRequest<unknown> }> = []
-  nextCreateError: RpcError | undefined
+  readonly calls: Array<{
+    readonly method: 'session.create' | 'session.prompt' | 'session.cancel'
+    readonly request: { readonly rpcId?: string; readonly payload: unknown }
+  }> = []
+  nextCreateError: TestProviderError | undefined
   nextCreateThrow: unknown
-  nextPromptError: RpcError | undefined
+  nextPromptError: TestProviderError | undefined
   nextPromptThrow: unknown
-  nextCancelError: RpcError | undefined
+  nextCancelError: TestProviderError | undefined
   nextCancelThrow: unknown
   nextAttachmentError: unknown
   nextAttachmentReadError: unknown
   nextInspectError: unknown
   private readonly idleWaiters = new Map<SessionIdType, Array<() => void>>()
-  private readonly promptRequests = new Map<SessionIdType, Array<RpcRequest<{
-    sessionId: SessionIdType
-    mode: 'queue' | 'steer'
-    content: Array<{ type: 'text'; text: string } | { type: 'image'; mediaType: string; data: string; name?: string }>
-  }>>>()
+  private readonly promptRequests = new Map<SessionIdType, Array<{
+    readonly rpcId: string
+    readonly payload: SessionPromptRequest
+  }>>()
 
-  readonly apiProxy: Pick<ApiProxy, 'sessions'>
+  readonly sessionController: {
+    readonly create: (request: SessionCreateRequest) => Promise<SessionCreateValue>
+    readonly prompt: (request: SessionPromptRequest, signal: AbortSignal) => Promise<SessionPromptValue>
+    readonly cancel: (request: SessionCancelRequest) => SessionCancelValue
+  }
 
   constructor(readonly ctx: Context) {
-    this.apiProxy = {
-      sessions: {
-        create: async (request) => {
-          this.calls.push({ method: 'session.create', request })
-          if (this.nextCreateThrow !== undefined) {
-            const error = this.nextCreateThrow
-            this.nextCreateThrow = undefined
-            throw error
-          }
-          if (this.nextCreateError !== undefined) {
-            const error = this.nextCreateError
-            this.nextCreateError = undefined
-            return rpcError(request, error)
-          }
-          const id = request.payload.sessionId ?? SessionId(`session-test-${this.sessions.size + 1}`)
-          const session = Session.create(id, [], {
-            version: SESSION_FORMAT_VERSION,
-            id,
-            createdAt: Date.now(),
-            cwd: request.payload.cwd ?? '/tmp',
+    this.sessionController = {
+      create: async (request) => {
+        this.calls.push({ method: 'session.create', request: { rpcId: undefined, payload: request } })
+        if (this.nextCreateThrow !== undefined) {
+          const error = this.nextCreateThrow
+          this.nextCreateThrow = undefined
+          throw error
+        }
+        if (this.nextCreateError !== undefined) {
+          const error = this.nextCreateError
+          this.nextCreateError = undefined
+          providerError(error)
+        }
+        const id = request.sessionId ?? SessionId(`session-test-${this.sessions.size + 1}`)
+        const session = Session.create(id, [], {
+          version: SESSION_FORMAT_VERSION,
+          id,
+          createdAt: Date.now(),
+          cwd: request.cwd ?? '/tmp',
+          isSeeded: false,
+        })
+        this.sessions.set(id, session)
+        const agent: TestAgent = {
+          id,
+          session,
+          status: 'idle',
+          whenIdle: () => this.waitForIdle(id),
+        }
+        this.agents.set(id, agent)
+        return {
+          sessionId: id,
+          ...(request.agentPreset === undefined ? {} : { agentPreset: request.agentPreset }),
+        }
+      },
+      prompt: async (request) => {
+        this.calls.push({ method: 'session.prompt', request: { rpcId: request.requestId, payload: request } })
+        if (this.nextPromptThrow !== undefined) {
+          const error = this.nextPromptThrow
+          this.nextPromptThrow = undefined
+          throw error
+        }
+        if (this.nextPromptError !== undefined) {
+          const error = this.nextPromptError
+          this.nextPromptError = undefined
+          providerError(error)
+        }
+        const agent = this.agents.get(request.sessionId)
+        if (agent === undefined) {
+          providerError({
+            code: 'session-not-found',
+            message: `session '${request.sessionId}' is not live`,
+            details: { sessionId: request.sessionId },
           })
-          this.sessions.set(id, session)
-          const agent: TestAgent = {
-            id,
-            session,
-            status: 'idle',
-            whenIdle: () => this.waitForIdle(id),
-          }
-          this.agents.set(id, agent)
-          return rpcOk(request, {
-            sessionId: id,
-            ...(request.payload.agentPreset === undefined ? {} : { agentPreset: request.payload.agentPreset }),
+        }
+        agent.status = 'running'
+        const requests = this.promptRequests.get(request.sessionId) ?? []
+        requests.push({ rpcId: request.requestId, payload: request })
+        this.promptRequests.set(request.sessionId, requests)
+        return { accepted: true as const }
+      },
+      cancel: (request) => {
+        this.calls.push({ method: 'session.cancel', request: { rpcId: undefined, payload: request } })
+        if (this.nextCancelThrow !== undefined) {
+          const error = this.nextCancelThrow
+          this.nextCancelThrow = undefined
+          throw error
+        }
+        if (this.nextCancelError !== undefined) {
+          const error = this.nextCancelError
+          this.nextCancelError = undefined
+          providerError(error)
+        }
+        const prompts = this.promptRequests.get(request.sessionId) ?? []
+        const latest = prompts.at(-1)
+        if (latest === undefined) {
+          providerError({
+            code: 'session-not-found',
+            message: `session '${request.sessionId}' has no prompt`,
+            details: { sessionId: request.sessionId },
           })
-        },
-        prompt: async (request) => {
-          this.calls.push({ method: 'session.prompt', request })
-          if (this.nextPromptThrow !== undefined) {
-            const error = this.nextPromptThrow
-            this.nextPromptThrow = undefined
-            throw error
-          }
-          if (this.nextPromptError !== undefined) {
-            const error = this.nextPromptError
-            this.nextPromptError = undefined
-            return rpcError(request, error)
-          }
-          const agent = this.agents.get(request.payload.sessionId)
-          if (agent === undefined) {
-            return rpcError(request, {
-              code: 'session-not-found',
-              message: `session '${request.payload.sessionId}' is not live`,
-              details: { sessionId: request.payload.sessionId },
-            })
-          }
-          agent.status = 'running'
-          const requests = this.promptRequests.get(request.payload.sessionId) ?? []
-          requests.push(request)
-          this.promptRequests.set(request.payload.sessionId, requests)
-          return rpcOk(request, { accepted: true as const })
-        },
-        cancel: async (request) => {
-          this.calls.push({ method: 'session.cancel', request })
-          if (this.nextCancelThrow !== undefined) {
-            const error = this.nextCancelThrow
-            this.nextCancelThrow = undefined
-            throw error
-          }
-          if (this.nextCancelError !== undefined) {
-            const error = this.nextCancelError
-            this.nextCancelError = undefined
-            return rpcError(request, error)
-          }
-          const prompts = this.promptRequests.get(request.payload.sessionId) ?? []
-          const latest = prompts.at(-1)
-          if (latest === undefined) {
-            return rpcError(request, {
-              code: 'session-not-found',
-              message: `session '${request.payload.sessionId}' has no prompt`,
-              details: { sessionId: request.payload.sessionId },
-            })
-          }
-          this.appendPromptTurn(request.payload.sessionId, prompts.length - 1, {
-            kind: 'aborted',
-            reason: { kind: 'user' },
-          })
-          this.setIdle(request.payload.sessionId)
-          return rpcOk(request, { accepted: true as const })
-        },
-      } as ApiProxy['sessions'],
+        }
+        this.appendPromptTurn(request.sessionId, prompts.length - 1, {
+          kind: 'aborted',
+          reason: { kind: 'user' },
+        })
+        this.setIdle(request.sessionId)
+        return { accepted: true as const }
+      },
     }
   }
 
   install(): void {
-    this.ctx.provide('apiProxy', this.apiProxy as ApiProxy)
+    this.ctx.provide('sessionController', this.sessionController)
     this.ctx.provide('sessions', {
       get: (id: SessionIdType) => this.agents.get(id)?.session,
       list: () => [...this.agents.values()].map(agent => agent.session),
@@ -165,7 +185,7 @@ class ControlledSessionRuntime {
       list: () => [...this.agents.values()],
     } as never)
     this.ctx.provide('sessionPersistence', {
-      inspect: async (id: SessionIdType) => {
+      open: async (id: SessionIdType) => {
         if (this.nextInspectError !== undefined) {
           const error = this.nextInspectError
           this.nextInspectError = undefined
@@ -173,12 +193,13 @@ class ControlledSessionRuntime {
         }
         const session = this.sessions.get(id)
         if (session === undefined) throw new Error(`session '${id}' not found`)
-        return { meta: session.header, events: session.events }
-      },
-      readFrom: async (id: SessionIdType, fromSeq: number) => {
-        const session = this.sessions.get(id)
-        if (session === undefined) throw new Error(`session '${id}' not found`)
-        return { meta: session.header, events: session.events.filter(event => event.seq >= fromSeq) }
+        return {
+          id,
+          header: session.header,
+          access: 'read',
+          read: async () => ({ eventState: 'detached', events: session.snapshotEvents() }),
+          close: async () => {},
+        }
       },
       listSnapshots: async () => [...this.sessions.values()].map(session => ({ header: session.header })),
     } as never)

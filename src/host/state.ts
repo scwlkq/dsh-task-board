@@ -1,7 +1,5 @@
 /** Pure task-board workflow, ordering, prompt, and snapshot helpers. @module @deepseek-ai/dsh-task-board/src/state */
 
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
-import { deepFreeze } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TaskBoardSessionRequestId } from './session-types.ts'
 import type {
@@ -127,6 +125,28 @@ function requireTransition(task: TaskBoardTask, status: TaskBoardStatus, operati
 
 function derivedActivityId(id: TaskBoardActivityId, suffix: string): TaskBoardActivityId {
   return `${id}:${suffix}` as TaskBoardActivityId
+}
+
+/** Round-trip a value through JSON, returning undefined when it is not losslessly serializable. */
+function snapshotJsonValue<T>(value: T): T | undefined {
+  try {
+    const json = JSON.stringify(value)
+    if (json === undefined) return undefined
+    return JSON.parse(json) as T
+  } catch {
+    return undefined
+  }
+}
+
+/** Deep-freeze an object graph in place. */
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const key of Object.getOwnPropertyNames(value)) {
+      deepFreeze((value as unknown as Record<string, unknown>)[key])
+    }
+    Object.freeze(value)
+  }
+  return value
 }
 
 function freezeTask(task: TaskBoardTask): TaskBoardTask {
